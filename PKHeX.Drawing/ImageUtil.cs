@@ -1,7 +1,7 @@
 using System;
-using System.Drawing;
-using System.Drawing.Imaging;
+using System.Net.Mime;
 using System.Runtime.InteropServices;
+using SkiaSharp;
 
 namespace PKHeX.Drawing;
 
@@ -10,130 +10,119 @@ namespace PKHeX.Drawing;
 /// </summary>
 public static class ImageUtil
 {
-    public static Bitmap LayerImage(Image baseLayer, Image overLayer, int x, int y, double transparency)
+    public static SKBitmap LayerImage(SKBitmap baseLayer, SKBitmap overLayer, int x, int y, double transparency)
     {
         overLayer = ChangeOpacity(overLayer, transparency);
         return LayerImage(baseLayer, overLayer, x, y);
     }
 
-    public static Bitmap LayerImage(Image baseLayer, Image overLayer, int x, int y)
+    public static SKBitmap LayerImage(SKBitmap baseLayer, SKBitmap overLayer, int x, int y)
     {
-        Bitmap img = new(baseLayer);
-        using Graphics gr = Graphics.FromImage(img);
-        gr.DrawImage(overLayer, x, y, overLayer.Width, overLayer.Height);
+        SKBitmap img = new(baseLayer.Info);
+        SKCanvas canvas = new(img);
+        canvas.DrawBitmap(overLayer, x, y);
         return img;
     }
 
-    public static Bitmap ChangeOpacity(Image img, double trans)
+    public static SKBitmap ChangeOpacity(SKBitmap img, double trans)
     {
-        var bmp = (Bitmap)img.Clone();
-        GetBitmapData(bmp, out BitmapData bmpData, out var ptr, out byte[] data);
+        var bmp = img.Copy();
+        GetBitmapData(bmp, out SKImageInfo bmpData, out var ptr, out byte[] data);
 
         Marshal.Copy(ptr, data, 0, data.Length);
         SetAllTransparencyTo(data, trans);
         Marshal.Copy(data, 0, ptr, data.Length);
-        bmp.UnlockBits(bmpData);
 
         return bmp;
     }
 
-    public static Bitmap ChangeAllColorTo(Image img, Color c)
+    public static SKBitmap ChangeAllColorTo(SKBitmap img, SKColor c)
     {
-        var bmp = (Bitmap)img.Clone();
-        GetBitmapData(bmp, out BitmapData bmpData, out var ptr, out byte[] data);
+        var bmp = img.Copy();
+        GetBitmapData(bmp, out SKImageInfo bmpData, out var ptr, out byte[] data);
 
         Marshal.Copy(ptr, data, 0, data.Length);
         ChangeAllColorTo(data, c);
         Marshal.Copy(data, 0, ptr, data.Length);
-        bmp.UnlockBits(bmpData);
 
         return bmp;
     }
 
-    public static Bitmap ChangeTransparentTo(Image img, Color c, byte trans, int start = 0, int end = -1)
+    public static SKBitmap ChangeTransparentTo(SKBitmap img, SKColor c, byte trans, int start = 0, int end = -1)
     {
-        var bmp = (Bitmap)img.Clone();
-        GetBitmapData(bmp, out BitmapData bmpData, out var ptr, out byte[] data);
+        var bmp = img.Copy();
+        GetBitmapData(bmp, out SKImageInfo bmpData, out var ptr, out byte[] data);
 
         Marshal.Copy(ptr, data, 0, data.Length);
         if (end == -1)
             end = data.Length - 4;
         SetAllTransparencyTo(data, c, trans, start, end);
         Marshal.Copy(data, 0, ptr, data.Length);
-        bmp.UnlockBits(bmpData);
 
         return bmp;
     }
 
-    public static Bitmap BlendTransparentTo(Image img, Color c, byte trans, int start = 0, int end = -1)
+    public static SKBitmap BlendTransparentTo(SKBitmap img, SKColor c, byte trans, int start = 0, int end = -1)
     {
-        var bmp = (Bitmap)img.Clone();
-        GetBitmapData(bmp, out BitmapData bmpData, out var ptr, out byte[] data);
+        var bmp = img.Copy();
+        GetBitmapData(bmp, out SKImageInfo bmpData, out var ptr, out byte[] data);
 
         Marshal.Copy(ptr, data, 0, data.Length);
         if (end == -1)
             end = data.Length - 4;
         BlendAllTransparencyTo(data, c, trans, start, end);
         Marshal.Copy(data, 0, ptr, data.Length);
-        bmp.UnlockBits(bmpData);
 
         return bmp;
     }
 
-    public static Bitmap WritePixels(Image img, Color c, int start, int end)
+    public static SKBitmap WritePixels(SKBitmap img, SKColor c, int start, int end)
     {
-        var bmp = (Bitmap)img.Clone();
-        GetBitmapData(bmp, out BitmapData bmpData, out var ptr, out byte[] data);
+        var bmp = img.Copy();
+        GetBitmapData(bmp, out SKImageInfo bmpData, out var ptr, out byte[] data);
 
         Marshal.Copy(ptr, data, 0, data.Length);
         ChangeAllTo(data, c, start, end);
         Marshal.Copy(data, 0, ptr, data.Length);
-        bmp.UnlockBits(bmpData);
 
         return bmp;
     }
 
-    public static Bitmap ToGrayscale(Image img)
+    public static SKBitmap ToGrayscale(SKBitmap img)
     {
-        var bmp = (Bitmap)img.Clone();
-        GetBitmapData(bmp, out BitmapData bmpData, out var ptr, out byte[] data);
+        var bmp = img.Copy();
+        GetBitmapData(bmp, out SKImageInfo bmpData, out var ptr, out byte[] data);
 
         Marshal.Copy(ptr, data, 0, data.Length);
         SetAllColorToGrayScale(data);
         Marshal.Copy(data, 0, ptr, data.Length);
-        bmp.UnlockBits(bmpData);
 
         return bmp;
     }
 
-    private static void GetBitmapData(Bitmap bmp, out BitmapData bmpData, out nint ptr, out byte[] data)
+    private static void GetBitmapData(SKBitmap bmp, out SKImageInfo bmpData, out nint ptr, out byte[] data)
     {
-        bmpData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
-        ptr = bmpData.Scan0;
+        bmpData = new(bmp.Width, bmp.Height, bmp.ColorType);
+        ptr = bmp.GetPixels();
         data = new byte[bmp.Width * bmp.Height * 4];
     }
 
-    public static Bitmap GetBitmap(byte[] data, int width, int height, int length, PixelFormat format = PixelFormat.Format32bppArgb)
+    public static SKBitmap GetBitmap(byte[] data, int width, int height, int length, SKColorType format = SKColorType.Rgba8888)
     {
-        var bmp = new Bitmap(width, height, format);
-        var bmpData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.WriteOnly, format);
-        var ptr = bmpData.Scan0;
-        Marshal.Copy(data, 0, ptr, length);
-        bmp.UnlockBits(bmpData);
+        var bmp = new SKBitmap(new(width, height, format));
+        Marshal.Copy(data, 0, bmp.GetPixels(), length);
         return bmp;
     }
 
-    public static Bitmap GetBitmap(byte[] data, int width, int height, PixelFormat format = PixelFormat.Format32bppArgb)
+    public static SKBitmap GetBitmap(byte[] data, int width, int height, SKColorType format = SKColorType.Rgba8888)
     {
         return GetBitmap(data, width, height, data.Length, format);
     }
 
-    public static byte[] GetPixelData(Bitmap bitmap)
+    public static byte[] GetPixelData(SKBitmap bitmap)
     {
         var argbData = new byte[bitmap.Width * bitmap.Height * 4];
-        var bd = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, bitmap.PixelFormat);
-        Marshal.Copy(bd.Scan0, argbData, 0, bitmap.Width * bitmap.Height * 4);
-        bitmap.UnlockBits(bd);
+        Marshal.Copy(bitmap.GetPixels(), argbData, 0, bitmap.Width * bitmap.Height * 4);
         return argbData;
     }
 
@@ -148,7 +137,7 @@ public static class ImageUtil
 
     public static void RemovePixels(Span<byte> pixels, ReadOnlySpan<byte> original)
     {
-        var arr = MemoryMarshal.Cast<byte, int>(pixels);
+        var arr = MemoryMarshal.Cast<byte, uint>(pixels);
         for (int i = original.Length - 4; i >= 0; i -= 4)
         {
             if (original[i + 3] != 0)
@@ -162,10 +151,10 @@ public static class ImageUtil
             data[i + 3] = (byte)(data[i + 3] * trans);
     }
 
-    public static void SetAllTransparencyTo(Span<byte> data, Color c, byte trans, int start, int end)
+    public static void SetAllTransparencyTo(Span<byte> data, SKColor c, byte trans, int start, int end)
     {
-        var arr = MemoryMarshal.Cast<byte, int>(data);
-        var value = Color.FromArgb(trans, c.R, c.G, c.B).ToArgb();
+        var arr = MemoryMarshal.Cast<byte, uint>(data);
+        var value = (uint)new SKColor(c.Red, c.Green, c.Blue, trans);
         for (int i = end; i >= start; i -= 4)
         {
             if (data[i + 3] == 0)
@@ -173,10 +162,10 @@ public static class ImageUtil
         }
     }
 
-    public static void BlendAllTransparencyTo(Span<byte> data, Color c, byte trans, int start, int end)
+    public static void BlendAllTransparencyTo(Span<byte> data, SKColor c, byte trans, int start, int end)
     {
-        var arr = MemoryMarshal.Cast<byte, int>(data);
-        var value = Color.FromArgb(trans, c.R, c.G, c.B).ToArgb();
+        var arr = MemoryMarshal.Cast<byte, uint>(data);
+        var value = (uint)new SKColor(trans, c.Red, c.Green, c.Blue);
         for (int i = end; i >= start; i -= 4)
         {
             var alpha = data[i + 3];
@@ -188,7 +177,7 @@ public static class ImageUtil
     }
 
     // heavily favor second (new) color
-    private static int BlendColor(int color1, int color2, double amount = 0.2)
+    private static uint BlendColor(uint color1, uint color2, double amount = 0.2)
     {
         var a1 = (color1 >> 24) & 0xFF;
         var r1 = (color1 >> 16) & 0xFF;
@@ -205,21 +194,21 @@ public static class ImageUtil
         byte g = (byte)((g1 * amount) + (g2 * (1 - amount)));
         byte b = (byte)((b1 * amount) + (b2 * (1 - amount)));
 
-        return (a << 24) | (r << 16) | (g << 8) | b;
+        return (uint)((a << 24) | (r << 16) | (g << 8) | b);
     }
 
-    public static void ChangeAllTo(Span<byte> data, Color c, int start, int end)
+    public static void ChangeAllTo(Span<byte> data, SKColor c, int start, int end)
     {
-        var arr = MemoryMarshal.Cast<byte, int>(data[start..end]);
-        var value = c.ToArgb();
+        var arr = MemoryMarshal.Cast<byte, uint>(data[start..end]);
+        var value = (uint)c;
         arr.Fill(value);
     }
 
-    public static void ChangeAllColorTo(Span<byte> data, Color c)
+    public static void ChangeAllColorTo(Span<byte> data, SKColor c)
     {
-        byte R = c.R;
-        byte G = c.G;
-        byte B = c.B;
+        byte R = c.Red;
+        byte G = c.Green;
+        byte B = c.Blue;
         for (int i = 0; i < data.Length; i += 4)
         {
             if (data[i + 3] == 0)
