@@ -17,7 +17,7 @@ public static class SpriteName
     /// <summary>
     /// Gets the resource name of the <see cref="Ball"/> sprite.
     /// </summary>
-    public static string GetResourceStringBall(byte ball) => $"_ball{ball}";
+    public static string GetResourceStringBall(byte ball) => $"img/ball/_ball{ball}.png";
 
     /// <summary>
     /// Gets the resource name of the Pokémon sprite.
@@ -27,7 +27,10 @@ public static class SpriteName
         if (SpeciesDefaultFormSprite.Contains(species)) // Species who show their default sprite regardless of Form
             form = 0;
 
-        var sb = new StringBuilder(12); // longest expected string result
+        var sb = new StringBuilder(); // longest expected string result
+        sb.Append("Resources/img/");
+        sb.Append(shiny ? )
+
         sb.Append(Separator).Append(species);
 
         if (form != 0)

@@ -1,8 +1,7 @@
 using System;
 using System.Buffers;
-using System.Drawing;
 using PKHeX.Core;
-using PKHeX.Drawing.PokeSprite.Properties;
+using SkiaSharp;
 
 namespace PKHeX.Drawing.PokeSprite;
 
@@ -52,20 +51,24 @@ public static class SpriteUtil
         Spriter.Initialize(sav);
     }
 
-    public static Bitmap GetBallSprite(byte ball)
+    public static SKBitmap GetBallSprite(byte ball)
     {
-        string resource = SpriteName.GetResourceStringBall(ball);
-        return (Bitmap?)Resources.ResourceManager.GetObject(resource) ?? Resources._ball4; // Poké Ball (default)
+        try
+        {
+            return ResourceAccess.LoadResource(SpriteName.GetResourceStringBall(ball));
+        }
+        catch
+        {
+            return ResourceAccess.LoadResource("Resources/img/ball/_ball4"); // Poké Ball (default)
+        }
     }
 
-    public static Bitmap? GetItemSprite(int item) => Resources.ResourceManager.GetObject($"item_{item}") as Bitmap;
-
-    public static Bitmap GetSprite(ushort species, byte form, byte gender, uint formarg, int item, bool isegg, Shiny shiny, EntityContext context = EntityContext.None)
+    public static SKBitmap GetSprite(ushort species, byte form, byte gender, uint formarg, int item, bool isegg, Shiny shiny, EntityContext context = EntityContext.None)
     {
         return Spriter.GetSprite(species, form, gender, formarg, item, isegg, shiny, context);
     }
 
-    private static Bitmap GetSprite(PKM pk)
+    private static SKBitmap GetSprite(PKM pk)
     {
         var formarg = pk is IFormArgument f ? f.FormArgument : 0;
         var shiny = ShinyExtensions.GetType(pk);
@@ -78,23 +81,23 @@ public static class SpriteUtil
                 img = Spriter.GetSprite(Spriter.ShadowLugia, Lugia, pk.SpriteItem, pk.IsEgg, shiny, pk.Context);
 
             GetSpriteGlow(pk, 75, 0, 130, out var pixels, out var baseSprite, true);
-            var glowImg = ImageUtil.GetBitmap(pixels, baseSprite.Width, baseSprite.Height, baseSprite.PixelFormat);
+            var glowImg = ImageUtil.GetBitmap(pixels, baseSprite.Width, baseSprite.Height, baseSprite.ColorType);
             return ImageUtil.LayerImage(glowImg, img, 0, 0);
         }
         if (pk is IGigantamaxReadOnly { CanGigantamax: true})
         {
-            var gm = Resources.dyna;
+            var gm = ResourceAccess.LoadResource("Resources/img/dyna.png");
             return ImageUtil.LayerImage(img, gm, (img.Width - gm.Width) / 2, 0);
         }
         if (pk is IAlpha {IsAlpha: true})
         {
-            var alpha = Resources.alpha_alt;
+            var alpha = ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/alpha_alt.png");
             return ImageUtil.LayerImage(img, alpha, SlotTeamShiftX, 0);
         }
         return img;
     }
 
-    private static Bitmap GetSprite(PKM pk, SaveFile sav, int box, int slot, bool flagIllegal = false, StorageSlotType storage = StorageSlotType.None)
+    private static SKBitmap GetSprite(PKM pk, SaveFile sav, int box, int slot, bool flagIllegal = false, StorageSlotType storage = StorageSlotType.None)
     {
         bool inBox = (uint)slot < MaxSlotCount;
         bool empty = pk.Species == 0;
@@ -115,9 +118,9 @@ public static class SpriteUtil
                     : new LegalityAnalysis(pk, pk.PersonalInfo, storage);
 
                 if (!la.Valid)
-                    sprite = ImageUtil.LayerImage(sprite, Resources.warn, 0, FlagIllegalShiftY);
+                    sprite = ImageUtil.LayerImage(sprite, ResourceAccess.LoadResource("Resources/img/warn.png"), 0, FlagIllegalShiftY);
                 else if (pk.Format >= 8 && MoveInfo.IsDummiedMoveAny(pk))
-                    sprite = ImageUtil.LayerImage(sprite, Resources.hint, 0, FlagIllegalShiftY);
+                    sprite = ImageUtil.LayerImage(sprite, ResourceAccess.LoadResource("Resources/img/hint.png"), 0, FlagIllegalShiftY);
 
                 if (SpriteBuilder.ShowEncounterColorPKM != SpriteBackgroundType.None)
                     sprite = ApplyEncounterColor(la.EncounterOriginal, sprite, SpriteBuilder.ShowEncounterColorPKM);
@@ -133,16 +136,16 @@ public static class SpriteUtil
             // Indicate any battle box teams & according locked state.
             int team = flags.IsBattleTeam();
             if (team >= 0)
-                sprite = ImageUtil.LayerImage(sprite, Resources.team, SlotTeamShiftX, 0);
+                sprite = ImageUtil.LayerImage(sprite, ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/team.png"), SlotTeamShiftX, 0);
             if (flags.HasFlag(StorageSlotSource.Locked))
-                sprite = ImageUtil.LayerImage(sprite, Resources.locked, SlotLockShiftX, 0);
+                sprite = ImageUtil.LayerImage(sprite, ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/locked.png"), SlotLockShiftX, 0);
 
             // Some games store Party directly in the list of Pokémon data (LGP/E). Indicate accordingly.
             int party = flags.IsParty();
             if (party >= 0)
                 sprite = ImageUtil.LayerImage(sprite, PartyMarks[party], PartyMarkShiftX, 0);
             if (flags.HasFlag(StorageSlotSource.Starter))
-                sprite = ImageUtil.LayerImage(sprite, Resources.starter, 0, 0);
+                sprite = ImageUtil.LayerImage(sprite, ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/starter.png"), 0, 0);
         }
 
         if (SpriteBuilder.ShowExperiencePercent && !flagIllegal)
@@ -151,7 +154,7 @@ public static class SpriteUtil
         return sprite;
     }
 
-    private static Bitmap ApplyTeraColor(byte elementalType, Bitmap img, SpriteBackgroundType type)
+    private static SKBitmap ApplyTeraColor(byte elementalType, SKBitmap img, SpriteBackgroundType type)
     {
         var color = TypeColor.GetTeraSpriteColor(elementalType);
         var thk = SpriteBuilder.ShowTeraThicknessStripe;
@@ -160,17 +163,17 @@ public static class SpriteUtil
         return ApplyColor(img, type, color, thk, op, bg);
     }
 
-    public static Bitmap ApplyEncounterColor(IEncounterTemplate enc, Bitmap img, SpriteBackgroundType type)
+    public static SKBitmap ApplyEncounterColor(IEncounterTemplate enc, SKBitmap img, SpriteBackgroundType type)
     {
         var index = (enc.GetType().Name.GetHashCode() * 0x43FD43FD);
-        var color = Color.FromArgb(index);
+        var color = new SKColor((uint)index);
         var thk = SpriteBuilder.ShowEncounterThicknessStripe;
         var op = SpriteBuilder.ShowEncounterOpacityStripe;
         var bg = SpriteBuilder.ShowEncounterOpacityBackground;
         return ApplyColor(img, type, color, thk, op, bg);
     }
 
-    private static Bitmap ApplyColor(Bitmap img, SpriteBackgroundType type, Color color, int thick, byte opacStripe, byte opacBack)
+    private static SKBitmap ApplyColor(SKBitmap img, SpriteBackgroundType type, SKColor color, int thick, byte opacStripe, byte opacBack)
     {
         if (type == SpriteBackgroundType.BottomStripe)
         {
@@ -195,29 +198,34 @@ public static class SpriteUtil
         return img;
     }
 
-    private static Bitmap ApplyExperience(PKM pk, Bitmap img, IEncounterTemplate? enc = null)
+    private static SKBitmap ApplyExperience(PKM pk, SKBitmap img, IEncounterTemplate? enc = null)
     {
         const int bpp = 4;
         int start = bpp * SpriteWidth * (SpriteHeight - 1);
         var level = pk.CurrentLevel;
         if (level == 100)
-            return ImageUtil.WritePixels(img, Color.Lime, start, start + (SpriteWidth * bpp));
+            return ImageUtil.WritePixels(img, SKColors.Lime, start, start + (SpriteWidth * bpp));
 
         var pct = Experience.GetEXPToLevelUpPercentage(level, pk.EXP, pk.PersonalInfo.EXPGrowth);
         if (pct is not 0)
-            return ImageUtil.WritePixels(img, Color.DodgerBlue, start, start + (int)(SpriteWidth * pct * bpp));
+            return ImageUtil.WritePixels(img, SKColors.DodgerBlue, start, start + (int)(SpriteWidth * pct * bpp));
 
         var encLevel = enc is { IsEgg: true } ? enc.LevelMin : pk.MetLevel;
-        var color = level != encLevel && pk.HasOriginalMetLocation ? Color.DarkOrange : Color.Yellow;
+        var color = level != encLevel && pk.HasOriginalMetLocation ? SKColors.DarkOrange : SKColors.Yellow;
         return ImageUtil.WritePixels(img, color, start, start + (SpriteWidth * bpp));
     }
 
-    private static readonly Bitmap[] PartyMarks =
+    private static readonly SKBitmap[] PartyMarks =
     [
-        Resources.party1, Resources.party2, Resources.party3, Resources.party4, Resources.party5, Resources.party6,
+        ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/party1.png"),
+        ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/party2.png"),
+        ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/party3.png"),
+        ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/party4.png"),
+        ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/party5.png"),
+        ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/party6.png"),
     ];
 
-    public static void GetSpriteGlow(PKM pk, byte blue, byte green, byte red, out byte[] pixels, out Image baseSprite, bool forceHollow = false)
+    public static void GetSpriteGlow(PKM pk, byte blue, byte green, byte red, out byte[] pixels, out SKBitmap baseSprite, bool forceHollow = false)
     {
         bool egg = pk.IsEgg;
         var formarg = pk is IFormArgument f ? f.FormArgument : 0;
@@ -226,9 +234,9 @@ public static class SpriteUtil
         GetSpriteGlow(baseSprite, blue, green, red, out pixels, forceHollow || egg);
     }
 
-    public static void GetSpriteGlow(Image baseSprite, byte blue, byte green, byte red, out byte[] pixels, bool forceHollow = false)
+    public static void GetSpriteGlow(SKBitmap baseSprite, byte blue, byte green, byte red, out byte[] pixels, bool forceHollow = false)
     {
-        pixels = ImageUtil.GetPixelData((Bitmap)baseSprite);
+        pixels = ImageUtil.GetPixelData(baseSprite);
         if (!forceHollow)
         {
             ImageUtil.GlowEdges(pixels, blue, green, red, baseSprite.Width);
@@ -250,12 +258,12 @@ public static class SpriteUtil
         ArrayPool<byte>.Shared.Return(temp);
     }
 
-    public static Bitmap GetLegalIndicator(bool valid) => valid ? Resources.valid : Resources.warn;
+    public static SKBitmap GetLegalIndicator(bool valid) => valid ? ResourceAccess.LoadResource("Resources/img/valid.png") : ResourceAccess.LoadResource("Resources/img/warn.png");
 
     // Extension Methods
-    public static Bitmap Sprite(this PKM pk) => GetSprite(pk);
+    public static SKBitmap Sprite(this PKM pk) => GetSprite(pk);
 
-    public static Bitmap Sprite(this IEncounterTemplate enc)
+    public static SKBitmap Sprite(this IEncounterTemplate enc)
     {
         if (enc is MysteryGift g)
             return GetMysteryGiftPreviewPoke(g);
@@ -269,12 +277,12 @@ public static class SpriteUtil
         }
         if (enc is IGigantamaxReadOnly {CanGigantamax: true})
         {
-            var gm = Resources.dyna;
+            var gm = ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/dyna.png");
             img = ImageUtil.LayerImage(img, gm, (img.Width - gm.Width) / 2, 0);
         }
         if (enc is IAlphaReadOnly { IsAlpha: true })
         {
-            var alpha = Resources.alpha_alt;
+            var alpha = ResourceAccess.LoadResource("Resources/img/Pokemon Sprite Overlays/alpha_alt.png");
             img = ImageUtil.LayerImage(img, alpha, SlotTeamShiftX, 0);
         }
         if (SpriteBuilder.ShowEncounterColor != SpriteBackgroundType.None)
@@ -289,11 +297,11 @@ public static class SpriteUtil
         _ => 0,
     };
 
-    public static Bitmap Sprite(this PKM pk, SaveFile sav, int box = -1, int slot = -1,
+    public static SKBitmap Sprite(this PKM pk, SaveFile sav, int box = -1, int slot = -1,
         bool flagIllegal = false, StorageSlotType storage = StorageSlotType.None)
         => GetSprite(pk, sav, box, slot, flagIllegal, storage);
 
-    public static Bitmap GetMysteryGiftPreviewPoke(MysteryGift gift)
+    public static SKBitmap GetMysteryGiftPreviewPoke(MysteryGift gift)
     {
         if (gift is { IsEgg: true, Species: (int)Species.Manaphy }) // Manaphy Egg
             return GetSprite((int)Species.Manaphy, 0, 2, 0, 0, true, Shiny.Never, gift.Context);
@@ -309,28 +317,28 @@ public static class SpriteUtil
 
         if (gift is IGigantamaxReadOnly { CanGigantamax: true })
         {
-            var gm = Resources.dyna;
+            var gm = ResourceAccess.LoadResource("img/Pokemon Sprite Overlays/dyna.png");
             img = ImageUtil.LayerImage(img, gm, (img.Width - gm.Width) / 2, 0);
         }
         return img;
     }
 
-    public static Image? GetStatusSprite(this StatusCondition value)
+    public static SKBitmap? GetStatusSprite(this StatusCondition value)
     {
         if (value == 0)
             return null;
         if (value < StatusCondition.Poison)
-            return Resources.sicksleep;
+            return ResourceAccess.LoadResource("img/Status/sicksleep.png");
         if (value.HasFlag(StatusCondition.PoisonBad))
-            return Resources.sicktoxic;
+            return ResourceAccess.LoadResource("img/Status/sicktoxic.png");
         if (value.HasFlag(StatusCondition.Poison))
-            return Resources.sickpoison;
+            return ResourceAccess.LoadResource("img/Status/sickpoison.png");
         if (value.HasFlag(StatusCondition.Burn))
-            return Resources.sickburn;
+            return ResourceAccess.LoadResource("img/Status/sickburn.png");
         if (value.HasFlag(StatusCondition.Paralysis))
-            return Resources.sickparalyze;
+            return ResourceAccess.LoadResource("img/Status/sickparalyze.png");
         if (value.HasFlag(StatusCondition.Freeze))
-            return Resources.sickfrostbite;
+            return ResourceAccess.LoadResource("img/Status/sickfrostbite.png");
         return null;
     }
 }

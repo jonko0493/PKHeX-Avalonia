@@ -1,6 +1,4 @@
-using System.Drawing;
 using PKHeX.Core;
-using PKHeX.Drawing.PokeSprite.Properties;
 
 namespace PKHeX.Drawing.PokeSprite;
 
